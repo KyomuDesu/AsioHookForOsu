@@ -305,7 +305,7 @@ BOOL WINAPI MyBASS_ChannelStop(DWORD handle){
 			//psd->data[i].hSample = lastSample;
 			//printf("ReleaseSemaphore stop\n");
 			ReleaseSemaphore(osuRequest, 1, NULL);
-			pOrigBASS_ChannelStop(handle);
+			return pOrigBASS_ChannelStop(handle);
 		}
 	}
 	return pOrigBASS_ChannelStop(handle);

@@ -7,7 +7,7 @@
 
 #include "../inc/common.h"
 
-#pragma comment(lib, "../fmod/lib/fmod_vc.lib")
+// fmod_vc.lib linked via build command line
 
 BOOL EnableDebugPrivilege()
 {
@@ -228,7 +228,7 @@ void do_BASS_SampleLoad(){
 	FMOD::Sound *sound = NULL;
 	//FMOD_MODE mode = FMOD_CREATESAMPLE;
 	
-	FMOD_RESULT r = fmodSystem->createSound(psd->buf, FMOD_CREATESAMPLE/* | FMOD_LOOP_NORMAL*/, 0, &sound);
+	FMOD_RESULT r = fmodSystem->createSound(psd->buf, FMOD_CREATESAMPLE | FMOD_LOOP_OFF, 0, &sound);
 	printf("create sound %s\n", psd->buf);
 
 	if (r != FMOD_OK)
@@ -265,7 +265,7 @@ void do_BASS_SampleLoad_mem(){
 	FMOD_CREATESOUNDEXINFO extinfo = {0};
 	extinfo.cbsize = sizeof(extinfo);
 	extinfo.length = psd->length;
-	FMOD_RESULT r = fmodSystem->createSound(psd->buf, FMOD_CREATESAMPLE | FMOD_OPENMEMORY/* | FMOD_LOOP_NORMAL*/, &extinfo, &sound);
+	FMOD_RESULT r = fmodSystem->createSound(psd->buf, FMOD_CREATESAMPLE | FMOD_OPENMEMORY | FMOD_LOOP_OFF, &extinfo, &sound);
 	printf("create default sound\n");
 
 	if (r != FMOD_OK)
@@ -287,11 +287,22 @@ void do_bind_sample(int i){
 	FMOD::Channel *fmod_ch;
 	if(sound)
 	{
+		DWORD hChannel = psd->data[i].hChannel;
+		// Stop any existing FMOD channels for this BASS channel handle
+		// to prevent old channels from accumulating and playing forever
+		DWORD idx = g_head;
+		while (idx != g_tail) {
+			if (g_ch_fmodch_node[idx].ch == hChannel) {
+				g_ch_fmodch_node[idx].fmodch->stop();
+				g_ch_fmodch_node[idx].ch = 0;
+			}
+			idx = (idx + 1) % TEMP_CH_SIZE;
+		}
 		fmodSystem->playSound(sound, 0, false, &fmod_ch);
 		fmodSystem->update();
 		//g_ch_fmodch_map[psd->data[i].hChannel] = fmod_ch;
 		//printf("play smple 1\n");
-		g_ch_fmodch_node[g_tail].ch = psd->data[i].hChannel;
+		g_ch_fmodch_node[g_tail].ch = hChannel;
 		g_ch_fmodch_node[g_tail].fmodch = fmod_ch;
 		g_tail++;
 		g_tail%=TEMP_CH_SIZE;
@@ -306,7 +317,7 @@ void do_bind_sample(int i){
 	//	return;
 	//g_channel_map[hChannel] = psd->data[0].hSample;
 	//printf(" %d, %d\n", g_sample_map.size(), g_tail-g_head);
-    
+
 }
 
 //std::map<DWORD, FMOD::Channel*>					g_ch_fmodch_map;	//<channel, fmodchannel>
@@ -339,17 +350,18 @@ void do_BASS_ChannelStop(int i)
 	if (!ch)
 		return;
 	FMOD::Channel *fmod_ch = NULL;
+	if (g_head == g_tail)
+		return;
 	DWORD idx = g_tail;
-	while (idx!=g_head)
-	{
+	do {
+		idx = (idx - 1 + TEMP_CH_SIZE) % TEMP_CH_SIZE;
 		if (g_ch_fmodch_node[idx].ch == ch)
 		{
 			fmod_ch = g_ch_fmodch_node[idx].fmodch;
+			g_ch_fmodch_node[idx].ch = 0;
 			break;
 		}
-		idx--;
-		idx%=TEMP_CH_SIZE;
-	}
+	} while (idx != g_head);
 	if(fmod_ch)
 	{
 		fmod_ch->stop();
